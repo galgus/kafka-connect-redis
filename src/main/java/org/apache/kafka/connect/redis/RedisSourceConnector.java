@@ -21,6 +21,8 @@ package org.apache.kafka.connect.redis;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.redis.source.RedisSourceConfig;
+import org.apache.kafka.connect.redis.source.RedisSourceTask;
 import org.apache.kafka.connect.source.SourceConnector;
 
 import java.util.ArrayList;

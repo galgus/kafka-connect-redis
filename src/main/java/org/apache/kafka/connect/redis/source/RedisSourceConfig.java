@@ -1,4 +1,4 @@
-package org.apache.kafka.connect.redis;
+package org.apache.kafka.connect.redis.source;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more

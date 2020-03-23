@@ -1,4 +1,4 @@
-package org.apache.kafka.connect.redis;
+package org.apache.kafka.connect.redis.source;
 
 import java.io.IOException;
 import java.util.Map;

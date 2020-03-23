@@ -18,6 +18,7 @@ package org.apache.kafka.connect.redis;
  */
 
 
+import org.apache.kafka.connect.redis.source.*;
 import org.junit.Before;
 import org.junit.Test;
 

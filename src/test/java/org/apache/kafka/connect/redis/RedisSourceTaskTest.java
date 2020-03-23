@@ -8,6 +8,8 @@ import static org.junit.Assert.*;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 
+import org.apache.kafka.connect.redis.source.RedisSourceConfig;
+import org.apache.kafka.connect.redis.source.RedisSourceTask;
 import org.apache.kafka.connect.source.SourceRecord;
 
 /*
