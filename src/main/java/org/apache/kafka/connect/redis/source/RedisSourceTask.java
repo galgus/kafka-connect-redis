@@ -52,11 +52,11 @@ public class RedisSourceTask extends SourceTask {
 
     @Override
     public void start(final Map<String, String> props) {
-        final Map<String, Object> configuration = RedisSourceConfig.CONFIG_DEF.parse(props);
-        in_memory_event_size = (long) configuration.get(RedisSourceConfig.IN_MEMORY_EVENT_SIZE);
-        memory_ratio = (double) configuration.get(RedisSourceConfig.MEMORY_RATIO);
-        event_cache_file_name = (String) configuration.get(RedisSourceConfig.EVENT_CACHE_FILE);
-        topic = (String) configuration.get(RedisSourceConfig.TOPIC);
+        final Map<String, Object> configuration = RedisSourceTaskConfig.CONFIG_DEF.parse(props);
+        in_memory_event_size = (long) configuration.get(RedisSourceTaskConfig.IN_MEMORY_EVENT_SIZE);
+        memory_ratio = (double) configuration.get(RedisSourceTaskConfig.MEMORY_RATIO);
+        event_cache_file_name = (String) configuration.get(RedisSourceTaskConfig.EVENT_CACHE_FILE);
+        topic = (String) configuration.get(RedisSourceTaskConfig.TOPIC);
 
 
         eventBuffer = new RedisBacklogEventBuffer(in_memory_event_size, memory_ratio, event_cache_file_name);
@@ -86,7 +86,7 @@ public class RedisSourceTask extends SourceTask {
 
     SourceRecord getSourceRecord(final Event event) {
         SourceRecord record = null;
-        final Map<String, String> partition = Collections.singletonMap(RedisSourceConfig.SOURCE_PARTITION_KEY, RedisSourceConfig.SOURCE_PARTITION_VALUE);
+        final Map<String, String> partition = Collections.singletonMap(RedisSourceTaskConfig.SOURCE_PARTITION_KEY, RedisSourceTaskConfig.SOURCE_PARTITION_VALUE);
         final SchemaBuilder bytesSchema = SchemaBuilder.bytes();
 
         // Redis backlog has no offset or timestamp
@@ -94,7 +94,7 @@ public class RedisSourceTask extends SourceTask {
         final long timestamp = ts.getTime();
 
         // set timestamp as offset
-        final Map<String, ?> offset = Collections.singletonMap(RedisSourceConfig.OFFSET_KEY, timestamp);
+        final Map<String, ?> offset = Collections.singletonMap(RedisSourceTaskConfig.OFFSET_KEY, timestamp);
         try {
             final String cmd = mapper.writeValueAsString(event);
             record = new SourceRecord(partition, offset, this.topic, null, bytesSchema, event.getClass().getName().getBytes(), null, cmd, timestamp);

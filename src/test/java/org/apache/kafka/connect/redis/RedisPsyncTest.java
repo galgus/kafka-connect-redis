@@ -51,7 +51,7 @@ public class RedisPsyncTest {
     public void testPartialSync() throws IOException, InterruptedException {
         RedisBacklogEventBuffer eventBuffer = new RedisBacklogEventBuffer(1024 * 1024L, 1.0, "events");
         HashMap<String, String> props = new HashMap();
-        props.put(RedisSourceConfig.USE_PSYNC2, String.valueOf(use_psync2));
+        props.put(RedisSourceTaskConfig.USE_PSYNC2, String.valueOf(use_psync2));
         RedisPartialSyncWorker psyncWorker = new RedisPartialSyncWorker(eventBuffer, props);
         Thread workerThread = new Thread(psyncWorker);
         ExecutorService service = Executors.newFixedThreadPool(1);

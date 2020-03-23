@@ -21,7 +21,7 @@ package org.apache.kafka.connect.redis;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.connector.Task;
-import org.apache.kafka.connect.redis.source.RedisSourceConfig;
+import org.apache.kafka.connect.redis.source.RedisSourceTaskConfig;
 import org.apache.kafka.connect.redis.source.RedisSourceTask;
 import org.apache.kafka.connect.source.SourceConnector;
 
@@ -62,6 +62,6 @@ public class RedisSourceConnector extends SourceConnector {
 
     @Override
     public ConfigDef config() {
-        return RedisSourceConfig.CONFIG_DEF;
+        return RedisSourceTaskConfig.CONFIG_DEF;
     }
 }

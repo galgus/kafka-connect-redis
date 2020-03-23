@@ -8,8 +8,8 @@ import static org.junit.Assert.*;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 
-import org.apache.kafka.connect.redis.source.RedisSourceConfig;
 import org.apache.kafka.connect.redis.source.RedisSourceTask;
+import org.apache.kafka.connect.redis.source.RedisSourceTaskConfig;
 import org.apache.kafka.connect.source.SourceRecord;
 
 /*
@@ -40,8 +40,8 @@ public class RedisSourceTaskTest {
     @Test
     public void testTaskStart() throws InterruptedException {
         final HashMap<String, String> props = new HashMap<>();
-        props.put(RedisSourceConfig.USE_PSYNC2, "false");
-        props.put(RedisSourceConfig.TOPIC, "fantacy");
+        props.put(RedisSourceTaskConfig.USE_PSYNC2, "false");
+        props.put(RedisSourceTaskConfig.TOPIC, "fantacy");
         final RedisSourceTask task = new RedisSourceTask();
         task.start(props);
         sleep(5000);

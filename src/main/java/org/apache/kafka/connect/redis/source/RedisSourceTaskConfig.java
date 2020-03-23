@@ -24,7 +24,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import java.util.HashMap;
 import java.util.Map;
 
-public class RedisSourceConfig extends AbstractConfig {
+public class RedisSourceTaskConfig extends AbstractConfig {
     public static final String HOST = "host";
     public static final String PORT = "port";
     public static final String POLL_BATCH_SIZE = "poll_batch_size";
@@ -48,7 +48,7 @@ public class RedisSourceConfig extends AbstractConfig {
             .define(EVENT_CACHE_FILE, ConfigDef.Type.STRING, "events", ConfigDef.Importance.HIGH, "Event cache file name")
             .define(USE_PSYNC2, ConfigDef.Type.BOOLEAN, false, ConfigDef.Importance.HIGH, "Whether use Psync 2 introduced by redis 4.0");
 
-    public RedisSourceConfig(Map<?, ?> originals) {
+    public RedisSourceTaskConfig(Map<?, ?> originals) {
         super(CONFIG_DEF, originals);
     }
 
