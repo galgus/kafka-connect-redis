@@ -1,4 +1,4 @@
-package org.apache.kafka.connect.redis;
+package net.galgus.kafka.connect.redis;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -18,6 +18,7 @@ package org.apache.kafka.connect.redis;
  */
 
 
+import net.galgus.kafka.connect.redis.source.*;
 import org.apache.kafka.connect.redis.source.*;
 import org.junit.Before;
 import org.junit.Test;

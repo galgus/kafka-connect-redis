@@ -1,4 +1,4 @@
-package org.apache.kafka.connect.redis.source;
+package net.galgus.kafka.connect.redis.source;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;

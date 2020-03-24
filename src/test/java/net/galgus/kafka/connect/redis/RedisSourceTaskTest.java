@@ -1,16 +1,12 @@
 
-package org.apache.kafka.connect.redis;
+package net.galgus.kafka.connect.redis;
 
 import static java.lang.Thread.*;
-import static org.hamcrest.CoreMatchers.*;
-import static org.junit.Assert.*;
 
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 
-import org.apache.kafka.connect.redis.source.RedisSourceTask;
-import org.apache.kafka.connect.redis.source.RedisSourceTaskConfig;
-import org.apache.kafka.connect.source.SourceRecord;
+import net.galgus.kafka.connect.redis.source.RedisSourceTask;
+import net.galgus.kafka.connect.redis.source.RedisSourceTaskConfig;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -30,10 +26,6 @@ import org.apache.kafka.connect.source.SourceRecord;
  */
 
 import org.junit.Test;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.moilioncircle.redis.replicator.cmd.impl.LPushCommand;
-import com.moilioncircle.redis.replicator.event.Event;
 
 public class RedisSourceTaskTest {
 
