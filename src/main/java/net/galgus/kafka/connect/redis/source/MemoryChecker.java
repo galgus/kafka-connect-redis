@@ -27,37 +27,52 @@ import java.util.concurrent.TimeUnit;
 
 public class MemoryChecker {
     private static final Logger log = LoggerFactory.getLogger(MemoryChecker.class);
+
     private final double memoryLimitRatio;
-    private final RedisBacklogEventBuffer eventBuffer;
 
-    private Thread thread = new Thread() {
-        @Override
-        public void run() {
-            check();
-        }
-    };
+    private final RedisBacklogEventBuffer redisBacklogEventBuffer;
+    private final ScheduledExecutorService scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
 
-    private void check() {
-        // http://stackoverflow.com/questions/12807797/java-get-available-memory
-        long maxMem = Runtime.getRuntime().maxMemory();
-        long allocatedMem = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
-        long availableMem = maxMem - allocatedMem;
-        double memRatio = 1.0 - availableMem * 1.0 / maxMem;
-        if (memRatio > memoryLimitRatio) {
-            this.eventBuffer.setShouldEvict(true);
-        } else {
-            this.eventBuffer.setShouldEvict(false);
-        }
-    }
+    public MemoryChecker(RedisBacklogEventBuffer redisBacklogEventBuffer, double ratio) {
+        log.info("Initializing memory checker...");
 
-    private final ScheduledExecutorService scheduler =
-            Executors.newScheduledThreadPool(1);
-
-
-    public MemoryChecker(RedisBacklogEventBuffer buffer, double ratio) {
-        this.eventBuffer = buffer;
+        this.redisBacklogEventBuffer = redisBacklogEventBuffer;
         this.memoryLimitRatio = ratio;
-        scheduler.scheduleAtFixedRate(thread, 0, 60, TimeUnit.SECONDS);
+
+        scheduledExecutorService.scheduleAtFixedRate(
+          this::checkMemoryRatio,
+          0,
+          60,
+          TimeUnit.SECONDS);
+
         log.info("Memory checker started.");
     }
+
+    public void start() {
+        scheduledExecutorService.scheduleAtFixedRate(
+          this::checkMemoryRatio,
+          0,
+          60,
+          TimeUnit.SECONDS);
+    }
+
+    public void stop() {
+        log.info("Stopping memory ratio checker...");
+        scheduledExecutorService.shutdown();
+        log.info("Memory ratio checker stopped");
+    }
+
+    private void checkMemoryRatio() {
+        // Maximum amount of memory that Java virtual machine will attempt to use
+        long javaMaxMemoryToUse = Runtime.getRuntime().maxMemory();
+
+        long javaAllocatedMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory();
+        long javaAvailableMemory = javaMaxMemoryToUse - javaAllocatedMemory;
+        double memoryRatio = 1.0 - javaAvailableMemory * 1.0 / javaMaxMemoryToUse;
+
+        log.debug("Checking memory ratio: {} bytes", memoryRatio);
+
+        this.redisBacklogEventBuffer.setShouldEvict(memoryRatio > memoryLimitRatio);
+    }
+
 }

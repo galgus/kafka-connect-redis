@@ -17,12 +17,9 @@ package net.galgus.kafka.connect.redis.source;
  * limitations under the License.
  */
 
-import java.sql.Timestamp;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.moilioncircle.redis.replicator.event.Event;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -30,20 +27,22 @@ import org.apache.kafka.connect.source.SourceTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.moilioncircle.redis.replicator.event.Event;
+import java.sql.Timestamp;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 public class RedisSourceTask extends SourceTask {
     private static final Logger log = LoggerFactory.getLogger(RedisSourceTask.class);
 
-    private long inMemoryEventSize;
-    private double memoryRatio;
-    private String eventCacheFileName;
-    private RedisBacklogEventBuffer eventBuffer;
-    private final ObjectMapper mapper = new ObjectMapper();
+    private RedisBacklogEventBuffer redisBacklogEventBuffer;
+    private MemoryChecker memoryChecker;
 
-    private String topic;
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private String kafkaOutputTopic;
 
     @Override
     public String version() {
@@ -52,35 +51,33 @@ public class RedisSourceTask extends SourceTask {
 
     @Override
     public void start(final Map<String, String> props) {
+        log.info("Start an Redis Source Task");
+
         final Map<String, Object> configuration = RedisSourceTaskConfig.CONFIG_DEF.parse(props);
-        inMemoryEventSize = (long) configuration.get(RedisSourceTaskConfig.REDIS_IN_MEMORY_EVENT_SIZE);
-        memoryRatio = (double) configuration.get(RedisSourceTaskConfig.REDIS_MEMORY_RATIO);
-        eventCacheFileName = (String) configuration.get(RedisSourceTaskConfig.REDIS_EVENT_CACHE_FILE);
-        topic = (String) configuration.get(RedisSourceTaskConfig.REDIS_TOPIC);
 
-        eventBuffer = new RedisBacklogEventBuffer(inMemoryEventSize, memoryRatio, eventCacheFileName);
+        long maxInMemoryEventsSize = (long) configuration.get(RedisSourceTaskConfig.REDIS_MAX_EVENTS_IN_MEMORY);
+        double memoryRatio = (double) configuration.get(RedisSourceTaskConfig.REDIS_MEMORY_RATIO);
+        String cachedEventsInFile = (String) configuration.get(RedisSourceTaskConfig.REDIS_CACHE_EVENTS_IN_FILE);
+        kafkaOutputTopic = (String) configuration.get(RedisSourceTaskConfig.REDIS_TOPIC);
 
-        final RedisPartialSyncWorker psyncWorker = new RedisPartialSyncWorker(eventBuffer, props);
+        redisBacklogEventBuffer = new RedisBacklogEventBuffer(maxInMemoryEventsSize, cachedEventsInFile);
+
+        memoryChecker = new MemoryChecker(redisBacklogEventBuffer, memoryRatio);
+        memoryChecker.start();
+
+        final RedisPartialSyncWorker psyncWorker = new RedisPartialSyncWorker(redisBacklogEventBuffer, props);
         final Thread workerThread = new Thread(psyncWorker);
         workerThread.start();
     }
 
     @Override
-    public List<SourceRecord> poll() throws InterruptedException {
-        final ArrayList<SourceRecord> records = new ArrayList<>();
-
-        final Event event = eventBuffer.poll();
-
-        if (event != null) {
-            //log.debug(ev.toJson());
-            final SourceRecord sourceRecord = getSourceRecord(event);
-            if (sourceRecord != null) {
-                log.debug("Source Record: {}", sourceRecord);
-                records.add(sourceRecord);
-            }
-        }
-
-        return records;
+    public List<SourceRecord> poll() {
+        return redisBacklogEventBuffer
+            .getAvailableEvents()
+            .stream()
+            .filter(Objects::nonNull)
+            .map(this::getSourceRecord)
+            .collect(Collectors.toList());
     }
 
     SourceRecord getSourceRecord(final Event event) {
@@ -95,8 +92,18 @@ public class RedisSourceTask extends SourceTask {
         // set timestamp as offset
         final Map<String, ?> offset = Collections.singletonMap(RedisSourceTaskConfig.REDIS_OFFSET_KEY, timestamp);
         try {
-            final String cmd = mapper.writeValueAsString(event);
-            record = new SourceRecord(partition, offset, this.topic, null, bytesSchema, event.getClass().getName().getBytes(), null, cmd, timestamp);
+            final String cmd = objectMapper.writeValueAsString(event);
+            record = new SourceRecord(
+              partition,
+              offset,
+              this.kafkaOutputTopic,
+              null,
+              bytesSchema,
+              event.getClass().getName().getBytes(),
+              null,
+              cmd,
+              timestamp
+            );
         } catch (final JsonProcessingException e) {
             log.error("Error converting event to JSON", e);
         }
@@ -105,6 +112,11 @@ public class RedisSourceTask extends SourceTask {
 
     @Override
     public void stop() {
+        log.info("Stopping Redis source task...");
 
+        this.redisBacklogEventBuffer.stop();
+        this.memoryChecker.stop();
+
+        log.info("Redis source task stopped");
     }
 }

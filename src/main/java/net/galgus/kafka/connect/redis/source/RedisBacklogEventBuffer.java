@@ -1,17 +1,15 @@
 package net.galgus.kafka.connect.redis.source;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.util.concurrent.ConcurrentLinkedQueue;
-
+import com.moilioncircle.redis.replicator.event.Event;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -30,141 +28,176 @@ import org.slf4j.LoggerFactory;
  * limitations under the License.
  */
 
-
-import com.moilioncircle.redis.replicator.event.Event;
-
 public class RedisBacklogEventBuffer {
     private static final Logger log = LoggerFactory.getLogger(RedisBacklogEventBuffer.class);
-    private final ConcurrentLinkedQueue<Event> queue;
-    private final MemoryChecker memoryChecker;
-    private File eventCacheFile;
+
+    private final ConcurrentLinkedQueue<Event> eventConcurrentLinkedQueue;
+
     private final String eventCacheFileName;
-    private ObjectInputStream is = null;
-    private ObjectOutputStream os = null;
-    private long inMemoryLimit;
-    private int inMemorySize = 0;
-    private int inFileSize = 0;
+    private File eventsCacheFile;
+
+    private ObjectInputStream objectInputStream;
+    private ObjectOutputStream objectOutputStream;
+
+    private final long maxInMemoryEvents;
+
+    private int eventsInMemory = 0;
+    private int cachedEventsInFile = 0;
     private boolean shouldEvict = false;
 
-    // signals that buffer should not accept events any more.
-    private volatile boolean closed = false;
+    private enum State {
+        RUNNING, STOPPED
+    }
 
-    public RedisBacklogEventBuffer(long inMemoryLimit, double ratio, String event_cache_file_name) {
-        this.queue = new ConcurrentLinkedQueue<>();
-        this.inMemoryLimit = inMemoryLimit;
-        this.memoryChecker = new MemoryChecker(this, ratio);
-        this.eventCacheFileName = event_cache_file_name;
-        this.eventCacheFile = new File(eventCacheFileName);
+    private State currentState = State.RUNNING;
+
+    public RedisBacklogEventBuffer(long maxInMemoryEvents, String eventsCacheFileName) {
+        log.debug("Creating new instance");
+        this.eventConcurrentLinkedQueue = new ConcurrentLinkedQueue<>();
+        this.maxInMemoryEvents = maxInMemoryEvents;
+        this.eventCacheFileName = eventsCacheFileName;
+        this.eventsCacheFile = new File(eventCacheFileName);
+
         try {
-            os = new ObjectOutputStream(new BufferedOutputStream(new FileOutputStream(eventCacheFile)));
+            objectOutputStream = new ObjectOutputStream(new BufferedOutputStream(new FileOutputStream(eventsCacheFile)));
         } catch (IOException e) {
             log.error(e.getMessage());
         }
     }
 
-    public void put(Event event) throws IOException {
-        if(closed) {
-            log.error("Attempt to put event to closed buffer. Rejecting event.");
-            return;
-        }
+    public void put(Event event) {
+        log.debug("Adding new event to buffer");
 
-        if(event == null) {
-            log.error("Attempt to put an empty event to buffer. Rejecting event.");
-            return;
-        }
+        if (currentState.equals(State.RUNNING)) {
+            if (event != null) {
 
-        inMemorySize++;
-        queue.offer(event);
-        //log.debug(queue.peek().toJson());
+                if (shouldEvict || (eventsInMemory >= maxInMemoryEvents)) {
+                    log.debug("Max in memory events reached. Persisting event in file");
+                    persistInFile(event);
+                    cachedEventsInFile++;
+                } else { // Add to memory buffer
+                    eventConcurrentLinkedQueue.offer(event);
+                    eventsInMemory++;
+                }
 
-        if (shouldEvict(event)) {
-            while (inMemorySize > 0) {
-                persist(queue.poll());
-                inFileSize++;
-                inMemorySize--;
-            }
-            log.debug("[EVICTED] {}", event);
-        }
-
-        return;
-    }
-
-    private boolean shouldEvict(Event event) {
-
-        if (shouldEvict) {
-            log.debug("Memory full, should begin to evict events");
-        }
-        return shouldEvict || (inMemorySize >= inMemoryLimit);
-    }
-
-    private void persist(Event event) {
-        try {
-            if(os == null || !eventCacheFile.canWrite()) {
-                eventCacheFile.delete();
-                eventCacheFile = new File(eventCacheFileName);
-                os = new ObjectOutputStream(new BufferedOutputStream(new FileOutputStream(eventCacheFile)));
-            }
-            if (os != null) {
-                os.writeObject(event);
-                //os.flush();
             } else {
-                log.error("Fail to get available output stream.");
+                log.warn("Attempt to put a null event in buffer. Rejecting event.");
             }
-        } catch (IOException e) {
-            log.error("Fail to write event cache file: {}", e.getMessage());
+        } else {
+            log.warn("Attempt to put an event in buffer with stopped state. Rejecting event.");
         }
     }
 
-    public Event poll()  {
-        Event event = null;
-        if(inFileSize > 0) {
-            if ( is == null ) {
-                try {
-                    os.flush();
-                } catch (IOException e) {
-                    log.error("Fail to flush event cache file: {}", e.getMessage());
-                }
-                try {
-                    is = new ObjectInputStream(new BufferedInputStream(new FileInputStream(eventCacheFile)));
-                } catch (IOException e) {
-                    log.error("Fail to open event cache file to read: {}", e.getMessage());
-                }
-            }
+    private void persistInFile(Event event) {
+        if(objectOutputStream == null || !eventsCacheFile.canWrite()) {
             try {
-                event = (Event) is.readObject();
-            } catch (Exception e) {
-                log.error("Fail to deserialize event cache file: {}", e.getMessage());
+                Files.delete(Paths.get(eventCacheFileName));
+                eventsCacheFile = new File(eventCacheFileName);
+                objectOutputStream = new ObjectOutputStream(
+                  new BufferedOutputStream(
+                    new FileOutputStream(eventsCacheFile)
+                  )
+                );
+            } catch (IOException pE) {
+                log.error("Error to delete '{}': {}", eventCacheFileName, pE);
             }
-            inFileSize--;
-            if (inFileSize == 0) {
+
+            if (objectOutputStream != null) {
                 try {
-                    os.close();
-                    os = null;
-                } catch (IOException e) {
-                    log.error("Fail to close event cache file: {}", e.getMessage());
+                    objectOutputStream.writeObject(event);
+                } catch (IOException pE) {
+                    log.error("Fail to write in '{}': {}", eventCacheFileName, pE);
                 }
+            } else {
+                log.error("Error to write in '{}': objectOutputSTream is null", eventCacheFileName);
             }
-        } else if(!queue.isEmpty()) {
-            inMemorySize--;
-            event = queue.poll();
         }
-        return event;
     }
 
-    public boolean empty() {
-        return queue.isEmpty();
+    public List<Event> getAvailableEvents() {
+        List<Event> eventList = new ArrayList<>();
+
+        if (cachedEventsInFile > 0 && objectInputStream == null) {
+            try {
+                objectOutputStream.flush();
+            } catch (IOException e) {
+                log.error("Fail to flush events to file '{}': {}", cachedEventsInFile, e.getMessage());
+            }
+
+            try {
+                objectInputStream = new ObjectInputStream(new BufferedInputStream(new FileInputStream(
+                  eventsCacheFile)));
+
+                while(cachedEventsInFile > 0) {
+                    Event event = (Event) objectInputStream.readObject();
+                    eventList.add(event);
+
+                    cachedEventsInFile--;
+                }
+
+                objectOutputStream.close();
+                objectOutputStream = null;
+            } catch (IOException e) {
+                log.error("Fail to read events from file '{}': {} ", eventsCacheFile, e.getMessage());
+            } catch (ClassNotFoundException e) {
+                log.error("Fail to deserialize event from file '{}': {}", eventsCacheFile, e.getMessage());
+            }
+        }
+
+        while (!eventConcurrentLinkedQueue.isEmpty()) {
+            eventList.add(eventConcurrentLinkedQueue.poll());
+            eventsInMemory--;
+        }
+
+        return eventList;
     }
+
+//    public Event poll()  {
+//        Event event = null;
+//        if(cachedEventsInFile > 0) {
+//            if ( objectInputStream == null ) {
+//                try {
+//                    objectOutputStream.flush();
+//                } catch (IOException e) {
+//                    log.error("Fail to flush events to file '{}': {}", cachedEventsInFile, e.getMessage());
+//                }
+//
+//                try {
+//                    objectInputStream = new ObjectInputStream(new BufferedInputStream(new FileInputStream(
+//                      eventsCacheFile)));
+//                    event = (Event) objectInputStream.readObject();
+//                    cachedEventsInFile--;
+//
+//                    if (cachedEventsInFile == 0) {
+//                        objectOutputStream.close();
+//                        objectOutputStream = null;
+//                    }
+//
+//                } catch (IOException e) {
+//                    log.error("Fail to read events from file '{}': {} ", cachedEventsInFile, e.getMessage());
+//                } catch (ClassNotFoundException e) {
+//                    log.error("Fail to deserialize event from file '{}': {}", cachedEventsInFile, e.getMessage());
+//                }
+//            }
+//        } else if(!eventConcurrentLinkedQueue.isEmpty()) {
+//            event = eventConcurrentLinkedQueue.poll();
+//            eventsInMemory--;
+//        }
+//        return event;
+//    }
 
     public void setShouldEvict(boolean shouldEvict) {
+        while (eventsInMemory > 0) {
+            persistInFile(eventConcurrentLinkedQueue.poll());
+            cachedEventsInFile++;
+            eventsInMemory--;
+        }
+
         this.shouldEvict = shouldEvict;
     }
 
-    public void clearEventCacheFile() {
-        this.eventCacheFile.delete();
-        log.info("Event cache file deleted.");
-    }
-
     public void stop() {
-        this.closed = true;
+        log.info("Stopping Redis event buffer...");
+        this.currentState = State.STOPPED;
     }
 }
