@@ -37,9 +37,9 @@ import com.moilioncircle.redis.replicator.event.Event;
 public class RedisSourceTask extends SourceTask {
     private static final Logger log = LoggerFactory.getLogger(RedisSourceTask.class);
 
-    private long in_memory_event_size;
-    private double memory_ratio;
-    private String event_cache_file_name;
+    private long inMemoryEventSize;
+    private double memoryRatio;
+    private String eventCacheFileName;
     private RedisBacklogEventBuffer eventBuffer;
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -53,13 +53,12 @@ public class RedisSourceTask extends SourceTask {
     @Override
     public void start(final Map<String, String> props) {
         final Map<String, Object> configuration = RedisSourceTaskConfig.CONFIG_DEF.parse(props);
-        in_memory_event_size = (long) configuration.get(RedisSourceTaskConfig.IN_MEMORY_EVENT_SIZE);
-        memory_ratio = (double) configuration.get(RedisSourceTaskConfig.MEMORY_RATIO);
-        event_cache_file_name = (String) configuration.get(RedisSourceTaskConfig.EVENT_CACHE_FILE);
-        topic = (String) configuration.get(RedisSourceTaskConfig.TOPIC);
+        inMemoryEventSize = (long) configuration.get(RedisSourceTaskConfig.REDIS_IN_MEMORY_EVENT_SIZE);
+        memoryRatio = (double) configuration.get(RedisSourceTaskConfig.REDIS_MEMORY_RATIO);
+        eventCacheFileName = (String) configuration.get(RedisSourceTaskConfig.REDIS_EVENT_CACHE_FILE);
+        topic = (String) configuration.get(RedisSourceTaskConfig.REDIS_TOPIC);
 
-
-        eventBuffer = new RedisBacklogEventBuffer(in_memory_event_size, memory_ratio, event_cache_file_name);
+        eventBuffer = new RedisBacklogEventBuffer(inMemoryEventSize, memoryRatio, eventCacheFileName);
 
         final RedisPartialSyncWorker psyncWorker = new RedisPartialSyncWorker(eventBuffer, props);
         final Thread workerThread = new Thread(psyncWorker);

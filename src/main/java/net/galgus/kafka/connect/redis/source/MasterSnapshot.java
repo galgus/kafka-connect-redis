@@ -19,19 +19,19 @@ package net.galgus.kafka.connect.redis.source;
 
 
 public class MasterSnapshot {
-    private String run_id;
-    private String master_repl_offset;
+    private String runId;
+    private String masterReplOffset;
 
-    public MasterSnapshot(String run_id, String master_repl_offset) {
-        this.run_id = run_id;
-        this.master_repl_offset = master_repl_offset;
+    public MasterSnapshot(String runId, String masterReplOffset) {
+        this.runId = runId;
+        this.masterReplOffset = masterReplOffset;
     }
 
     public String getRunId() {
-        return run_id;
+        return runId;
     }
 
     public String getMasterReplOffset() {
-        return master_repl_offset;
+        return masterReplOffset;
     }
 }
