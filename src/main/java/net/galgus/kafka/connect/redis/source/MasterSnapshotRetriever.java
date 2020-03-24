@@ -23,10 +23,14 @@ import redis.clients.jedis.Jedis;
 import java.util.Properties;
 
 public class MasterSnapshotRetriever {
-    private Jedis jedis;
+    private Jedis redisClient;
+
+    public MasterSnapshotRetriever(String redisHost, int redisPort) {
+        redisClient = new Jedis(redisHost, redisPort);
+    }
 
     private Properties extractRedisInfoSection(String section) {
-        String[] lines = jedis.info(section).split("\r\n");
+        String[] lines = redisClient.info(section).split("\r\n");
         Properties props = new Properties();
         for(String line: lines) {
             String[] kv = line.split(":");
@@ -36,12 +40,8 @@ public class MasterSnapshotRetriever {
         return props;
     }
 
-    public MasterSnapshotRetriever(String host, int port) {
-        jedis = new Jedis(host, port);
-    }
-
     public MasterSnapshot snapshot(Boolean use_psync2) {
-        jedis.connect();
+        redisClient.connect();
 
         Properties serverProps = extractRedisInfoSection("server");
         Properties replicationProps = extractRedisInfoSection("replication");
@@ -55,7 +55,7 @@ public class MasterSnapshotRetriever {
         String master_repl_offset = (String) replicationProps.get("master_repl_offset");
         MasterSnapshot snapshot = new MasterSnapshot(run_id, master_repl_offset);
 
-        jedis.disconnect();
+        redisClient.disconnect();
         return snapshot;
     }
 }

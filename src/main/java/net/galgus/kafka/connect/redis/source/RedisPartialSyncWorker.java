@@ -35,9 +35,28 @@ public class RedisPartialSyncWorker implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(RedisPartialSyncWorker.class);
 
     private final RedisReplicator replicator;
-    private final String host;
-    private final Integer port;
+    private final String redisHost;
+    private final Integer redisPort;
     private Boolean use_psync2;
+
+    public RedisPartialSyncWorker(final RedisBacklogEventBuffer eventBuffer, Map<String, String> props) {
+        Map<String, Object> configuration = RedisSourceTaskConfig.CONFIG_DEF.parse(props);
+        redisHost = (String) configuration.get(RedisSourceTaskConfig.REDIS_HOST);
+        redisPort = (Integer) configuration.get(RedisSourceTaskConfig.REDIS_PORT);
+
+        use_psync2 = (Boolean)configuration.get(RedisSourceTaskConfig.REDIS_USE_PSYNC2);
+
+        Configuration sourceOffset = getSourceConfiguration(redisHost, redisPort, use_psync2);
+        log.debug("Starting Redis Replicator: {}:{}", redisHost, redisPort);
+        replicator = new RedisReplicator(redisHost, redisPort, sourceOffset);
+        replicator.addEventListener(new EventListener() {
+            @Override
+            public void onEvent(Replicator replicator, Event event) {
+                log.debug(event.toString());
+                eventBuffer.put(event);
+            }
+        });
+    }
 
     public Configuration getSourceConfiguration(String host, Integer port, Boolean use_psync2) {
         MasterSnapshotRetriever msr = new MasterSnapshotRetriever(host, port);
@@ -48,27 +67,6 @@ public class RedisPartialSyncWorker implements Runnable {
         return conf;
     }
 
-    public RedisPartialSyncWorker(final RedisBacklogEventBuffer eventBuffer, Map<String, String> props) {
-        Map<String, Object> configuration = RedisSourceTaskConfig.CONFIG_DEF.parse(props);
-        host = (String) configuration.get(RedisSourceTaskConfig.REDIS_HOST);
-        port = (Integer) configuration.get(RedisSourceTaskConfig.REDIS_PORT);
-
-        use_psync2 = (Boolean)configuration.get(RedisSourceTaskConfig.REDIS_USE_PSYNC2);
-
-        Configuration sourceOffset = getSourceConfiguration(host, port, use_psync2);
-        replicator = new RedisReplicator(host, port, sourceOffset);
-        replicator.addEventListener(new EventListener() {
-            @Override
-            public void onEvent(Replicator replicator, Event event) {
-                log.debug(event.toString());
-                try {
-                    eventBuffer.put(event);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-        });
-    }
 
     @Override
     public void run() {
