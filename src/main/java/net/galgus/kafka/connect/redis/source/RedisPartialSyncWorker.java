@@ -50,10 +50,10 @@ public class RedisPartialSyncWorker implements Runnable {
 
     public RedisPartialSyncWorker(final RedisBacklogEventBuffer eventBuffer, Map<String, String> props) {
         Map<String, Object> configuration = RedisSourceTaskConfig.CONFIG_DEF.parse(props);
-        host = (String) configuration.get(RedisSourceTaskConfig.HOST);
-        port = (Integer) configuration.get(RedisSourceTaskConfig.PORT);
+        host = (String) configuration.get(RedisSourceTaskConfig.REDIS_HOST);
+        port = (Integer) configuration.get(RedisSourceTaskConfig.REDIS_PORT);
 
-        use_psync2 = (Boolean)configuration.get(RedisSourceTaskConfig.USE_PSYNC2);
+        use_psync2 = (Boolean)configuration.get(RedisSourceTaskConfig.REDIS_USE_PSYNC2);
 
         Configuration sourceOffset = getSourceConfiguration(host, port, use_psync2);
         replicator = new RedisReplicator(host, port, sourceOffset);

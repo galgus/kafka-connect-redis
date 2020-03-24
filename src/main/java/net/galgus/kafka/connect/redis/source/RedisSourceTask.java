@@ -93,7 +93,7 @@ public class RedisSourceTask extends SourceTask {
         final long timestamp = ts.getTime();
 
         // set timestamp as offset
-        final Map<String, ?> offset = Collections.singletonMap(RedisSourceTaskConfig.OFFSET_KEY, timestamp);
+        final Map<String, ?> offset = Collections.singletonMap(RedisSourceTaskConfig.REDIS_OFFSET_KEY, timestamp);
         try {
             final String cmd = mapper.writeValueAsString(event);
             record = new SourceRecord(partition, offset, this.topic, null, bytesSchema, event.getClass().getName().getBytes(), null, cmd, timestamp);
